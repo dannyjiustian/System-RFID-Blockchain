@@ -2,12 +2,17 @@
 #include <TFT_eSPI.h>
 #include <MFRC522.h>
 #include <DFRobotDFPlayerMini.h>
-#include <Free_Fonts.h>
+#include <Fonts.h>
 #include <OneButton.h>
 #include <EEPROM.h>
 #include <WiFiUdp.h>
 #include <WiFi.h>
 
+/**
+ * definisikan port mana saja yang akan dipakai
+ *
+ * NB untuk port lcd dapat ke file library TFT_eSPI/User_Setup.h
+ * */
 #define FPSerial Serial1
 #define SS_PIN_RFID 5
 #define RST_PIN_RFID 0
@@ -24,26 +29,33 @@ unsigned long
 bool
     WRITE_EEPROM_WIFI = false,       // mengsetting kondisi write eeprom wifi
     SMART_CONFIG_SUCCESS = false,    // mengsetting kondisi smartconfig
-    CHECK_DISPLAY_ON_STANDBY = true; // mengsetting kondisi display standby
+    CHECK_DISPLAY_ON_STANDBY = true, // mengsetting kondisi display standby
+    CHECK_SWITCH_MODE = false;       // mengsetting kondisi switch mode
 
-uint8_t displayTextLength;
+int
+    displayTextLength,
+    switchMode = 0;
 
-int switchMode = 0;
-bool checkSwitchMode = false;
 String *displayMode = nullptr;
 
+// init lcd library
 TFT_eSPI tft = TFT_eSPI();
+
+// init rfid library
 MFRC522 rfid(SS_PIN_RFID, RST_PIN_RFID);
 MFRC522::MIFARE_Key key;
+
+// init dfplayer library
 DFRobotDFPlayerMini DFPlayer;
+
+// init button library
 OneButton button(BTN_PIN, true);
 
 // init wifi memiliki port UDP
 WiFiUDP Udp;
 
-// void DFPlayerInformation(uint8_t type, int value);
-
-int arrayLength(String arr[])
+// fungsi untuk menghitung jumlah array
+int ArrayLength(String arr[])
 {
   int count = 0;
   while (arr[count] != "")
@@ -70,7 +82,7 @@ String ReadChipId()
 }
 
 // fungsi untuk menulis data ke eeprom
-void Write_EEPROM(char add, String data)
+void WriteEEPROM(char add, String data)
 {
   int _size = data.length();
   for (int i = 0; i < _size; i++)
@@ -82,7 +94,7 @@ void Write_EEPROM(char add, String data)
 }
 
 // fungsi untuk membaca data di eeprom
-String Read_EEPROM(char add)
+String ReadEEPROM(char add)
 {
   char data[100]; // Max 100 Bytes
   int length = 0;
@@ -154,7 +166,7 @@ void DFPlayerInformation(uint8_t type)
 // fungsi tombol untuk mengubah mode baca rfid
 void SwitchMode()
 {
-  checkSwitchMode = true;
+  CHECK_SWITCH_MODE = true;
 
   // Free previously allocated memory to avoid memory leaks
   delete[] displayMode;
@@ -189,8 +201,8 @@ void ResetESP()
   GenerateDisplay(displayText, 4, tft.width() / 2, 50);
 
   // menghapus ssid dan password dari eeprom
-  Write_EEPROM(20, "kosong");
-  Write_EEPROM(60, "kosong");
+  WriteEEPROM(20, "kosong");
+  WriteEEPROM(60, "kosong");
 
   delay(3000);
 
@@ -200,18 +212,20 @@ void ResetESP()
 
 void setup()
 {
+  // init serial speed monitor
   Serial.begin(115200);
   // init eeprom yang bisa diisi sebesar 512 bit
   EEPROM.begin(512);
-
+  // init serial dfplayer
   FPSerial.begin(9600, SERIAL_8N1, RX_PIN_DFPLAYER, TX_PIN_DFPLAYER);
+  // inti lcd
   tft.init();
-
+  // init spi
   SPI.begin();
+  // init rfid
   rfid.PCD_Init();
-
-  // write serial number sensor
-  Write_EEPROM(0, ReadChipId()); // C4C07C842178
+  // tulis id perangkat kedalam eeprom
+  WriteEEPROM(0, ReadChipId()); // C4C07C842178
 
   // matikan wifi
   WiFi.mode(WIFI_OFF);
@@ -221,32 +235,36 @@ void setup()
   WiFi.mode(WIFI_STA);
 
   String displayText[] = {"Selamat", "Datang"};
-  GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 80);
+  GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 80);
   tft.setTextDatum(TC_DATUM);
   tft.setFreeFont(FSB9);
   tft.drawString("VERSI SISTEM 1.0.0", 120, 200, GFXFF);
+
+  // check apakah dfplayer bermasalah atau tidak
   if (!DFPlayer.begin(FPSerial, true, true))
   {
     String displayText[] = {"Kartu SD", "Bermasalah!", "Silakan", "Restart", "Manual!"};
-    GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 30);
+    GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 30);
     while (true)
     {
       delay(0);
     }
   }
 
+  // setting volume dfplayer range 0 - 30
   DFPlayer.volume(30);
+  // putar lagu pertama
   DFPlayer.play(1);
   delay(2000);
 
   // mengecek apakah udah ada ssid dan password didalam eeprom
-  if (Read_EEPROM(20) != "kosong" && Read_EEPROM(60) != "kosong")
+  if (ReadEEPROM(20) != "kosong" && ReadEEPROM(60) != "kosong")
   {
     String displayText1[] = {"Proses", "Koneksi", "Jaringan"};
-    GenerateDisplay(displayText1, arrayLength(displayText1), tft.width() / 2, 70);
+    GenerateDisplay(displayText1, ArrayLength(displayText1), tft.width() / 2, 70);
     delay(2000);
     // mengkoneksikan wifi dengan ssid dan password dalam eeprom
-    WiFi.begin(Read_EEPROM(20).c_str(), Read_EEPROM(60).c_str());
+    WiFi.begin(ReadEEPROM(20).c_str(), ReadEEPROM(60).c_str());
     // setting bool smartconfig jadi true
     SMART_CONFIG_SUCCESS = !SMART_CONFIG_SUCCESS;
   }
@@ -281,54 +299,60 @@ void loop()
     if (!WRITE_EEPROM_WIFI)
     {
       // tulis ssid dan password yang telah didapatkan kedalam eeprom
-      Write_EEPROM(20, WiFi.SSID());
-      Write_EEPROM(60, WiFi.psk());
+      WriteEEPROM(20, WiFi.SSID());
+      WriteEEPROM(60, WiFi.psk());
       // mengubah nilai bool menjadi true
       WRITE_EEPROM_WIFI = !WRITE_EEPROM_WIFI;
     }
 
     // double check apakah eeprom sudah di isi atau belum
-    if (Read_EEPROM(20) == "kosong" && Read_EEPROM(60) == "kosong")
+    if (ReadEEPROM(20) == "kosong" && ReadEEPROM(60) == "kosong")
     {
       // tulis ssid dan password yang telah didapatkan kedalam eeprom
-      Write_EEPROM(20, WiFi.SSID());
-      Write_EEPROM(60, WiFi.psk());
+      WriteEEPROM(20, WiFi.SSID());
+      WriteEEPROM(60, WiFi.psk());
     }
 
     // setting bool smartconfig jadi true
     SMART_CONFIG_SUCCESS = !SMART_CONFIG_SUCCESS;
 
+    // check apakah sudah pernah tampilkan text jaringan aman?
     if (CHECK_DISPLAY_ON_STANDBY)
     {
       String displayText[] = {"Perangkat", "Terkoneksi", "Jaringan!"};
-      GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 70);
+      GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 70);
       CHECK_DISPLAY_ON_STANDBY = !CHECK_DISPLAY_ON_STANDBY;
       delay(3000);
     }
 
-    if (checkSwitchMode)
+    // check apakah mode pembacaan rfid ada perubahan atau tidak
+    if (CHECK_SWITCH_MODE)
     {
       GenerateDisplay(displayMode, sizeof(displayMode) - 1, tft.width() / 2, 70);
       delay(2000);
-      checkSwitchMode = false;
+      CHECK_SWITCH_MODE = !CHECK_SWITCH_MODE;
       String displayText[] = {"Silakan Scan", "Kartu Kamu", "Terima Kasih!"};
-      GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 70);
+      GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 70);
     }
 
+    // check apakah dfplayer tersedia atau tidak ketika ada perubahan seperti memutar lagu atau kartu sd terlepas
     if (DFPlayer.available())
     {
       String displayText[] = {"Silakan Scan", "Kartu Kamu", "Terima Kasih!"};
-      GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 70);
+      GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 70);
       DFPlayerInformation(DFPlayer.readType()); // Print the detail message from DFPlayer to handle different errors and states.
     }
 
+    // check apakah rfid baru terdeteksi dan dfplayer tidak ada masalah
     if ((!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) || DFPlayer.readType() == 3)
       return;
 
+    // cetak tipe dari kartu rfid yang dibaca
     Serial.print(F("PICC type: "));
     MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
     Serial.println(rfid.PICC_GetTypeName(piccType));
 
+    // cek apakah tipe kartu rfid adalah mifare classic
     if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&
         piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
         piccType != MFRC522::PICC_TYPE_MIFARE_4K)
@@ -337,20 +361,22 @@ void loop()
       return;
     }
 
+    // mengambil data uid dari kartu rfid yang terbaca
     Serial.print("Kartu ID Anda : ");
     Serial.println(GetUIDString(rfid.uid));
     String displayText[] = {"Scan Kartu", "Berhasil", "Terima Kasih!"};
-    GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 70);
+    GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 70);
+    // putar lagu kedua
     DFPlayer.play(2);
 
+    // mulai untuk berhenti membaca rfid ketika sudah terdeteksi
     rfid.PICC_HaltA();
-
     rfid.PCD_StopCrypto1();
   }
   else // apabila jaringan tidak terkoneksi
   {
     // mengecek apakah udah ada ssid dan password didalam eeprom
-    if (Read_EEPROM(20) == "kosong" && Read_EEPROM(60) == "kosong" && SMART_CONFIG_SUCCESS == false)
+    if (ReadEEPROM(20) == "kosong" && ReadEEPROM(60) == "kosong" && SMART_CONFIG_SUCCESS == false)
     {
       // mengubah nilai bool menjadi false
       WRITE_EEPROM_WIFI = !WRITE_EEPROM_WIFI;
@@ -358,10 +384,10 @@ void loop()
       if ((unsigned long)(timeNow - timeBefore_SMART_CONFIG) >= interval_SMART_CONFIG)
       {
         String displayText[] = {"Silakan", "Koneksikan", "Jaringan", "Perangkat"};
-        GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 50);
+        GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 50);
         // setting bool smartconfig tetap false
         SMART_CONFIG_SUCCESS = SMART_CONFIG_SUCCESS;
-
+        // ubah value display standby jadikan true dikarenakan lost connection
         CHECK_DISPLAY_ON_STANDBY = !CHECK_DISPLAY_ON_STANDBY;
         timeBefore_SMART_CONFIG = millis();
       }
@@ -374,8 +400,8 @@ void loop()
       if ((unsigned long)(timeNow - timeBefore_STATUS_WIFI) >= interval_STATUS_WIFI)
       {
         String displayText[] = {"Koneksi", "Jaringan", "Perangkat", "Bermasalah!"};
-        GenerateDisplay(displayText, arrayLength(displayText), tft.width() / 2, 50);
-
+        GenerateDisplay(displayText, ArrayLength(displayText), tft.width() / 2, 50);
+        // ubah value display standby jadikan true dikarenakan lost connection
         CHECK_DISPLAY_ON_STANDBY = !CHECK_DISPLAY_ON_STANDBY;
         // mengreset waktu sebelum status wifi dengan waktu sekarang
         timeBefore_STATUS_WIFI = millis();
