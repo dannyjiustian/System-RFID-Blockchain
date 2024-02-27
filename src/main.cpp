@@ -352,15 +352,6 @@ void loop()
     MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
     Serial.println(rfid.PICC_GetTypeName(piccType));
 
-    // cek apakah tipe kartu rfid adalah mifare classic
-    if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&
-        piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
-        piccType != MFRC522::PICC_TYPE_MIFARE_4K)
-    {
-      Serial.println(F("Your tag is not of type MIFARE Classic."));
-      return;
-    }
-
     // mengambil data uid dari kartu rfid yang terbaca
     Serial.print("Kartu ID Anda : ");
     Serial.println(GetUIDString(rfid.uid));
