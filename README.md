@@ -1,7 +1,7 @@
 
 # System Hardware for Contactless Payment with Blockchain System 
 
-This code is created with PlatformIO from Visual Studio Code, this code also uses C/C++ as the main language. In this project, there are other libraries from other authors such as TFT_eSPI, MFRC522, DFRobotDFPlayerMini, and OneButton. These libraries are very helpful to run this code optimally.
+This code is created with PlatformIO from Visual Studio Code, this code also uses C/C++ as the main language. In this project, there are other libraries from other authors such as TFT_eSPI, MFRC522, DFRobotDFPlayerMini, and OneButton. These libraries are very helpful to run this code optimally. This code is specific for ESP32 Wroom 32 or other name is ESP32 Dev Board / DOIT DEVKIT V1, if you use other board make sure the pins on the board are not conflicting.
 
 
 ## Installation
