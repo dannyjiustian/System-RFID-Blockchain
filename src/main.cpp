@@ -7,6 +7,11 @@
 #include <EEPROM.h>
 #include <WiFiUdp.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
+#include <time.h>
+#include <ArduinoJson.h>
+#include <NTPClient.h>
 
 /**
  * definisikan port mana saja yang akan dipakai
@@ -20,11 +25,49 @@
 #define TX_PIN_DFPLAYER 25
 #define BTN_PIN 13
 
+// HiveMQ Cloud Let's Encrypt CA certificate (hardcoded)
+static const char ca_cert[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+)EOF";
+
+// init semua variable yang dipakai
 unsigned long
     timeBefore_SMART_CONFIG = 0,  // setting waktu sebelumnya untuk smartconfig
     interval_SMART_CONFIG = 1000, // interval waktu untuk refreshnya
     timeBefore_STATUS_WIFI = 0,   // setting waktu sebelumnya untuk led wifi
-    interval_STATUS_WIFI = 300;   // interval waktu untuk kedipannya
+    interval_STATUS_WIFI = 300,   // interval waktu untuk kedipannya
+    timeBefore_MQTT_CHECK_STATUS = 0,
+    interval_MQTT_CHECK_STATUS = 10000;
 
 bool
     WRITE_EEPROM_WIFI = false,       // mengsetting kondisi write eeprom wifi
@@ -34,9 +77,22 @@ bool
 
 int
     displayTextLength,
-    switchMode = 0;
+    switchMode = 0,
+    portMqtt = 8883;
 
 String *displayMode = nullptr;
+
+String
+    clientId = "ESP32Client",
+    SN_SENSOR,
+    jsonString;
+
+const char
+    *mqtt_server = "21a415c74e5f429db8def0c60728bb0d.s1.eu.hivemq.cloud",
+    *mqtt_user = "testingbroker",
+    *mqtt_password = "testingbroker",
+    *topic_online = "CheckESP",
+    *read_rfid = "ReadRFID";
 
 // init lcd library
 TFT_eSPI tft = TFT_eSPI();
@@ -53,6 +109,15 @@ OneButton button(BTN_PIN, true);
 
 // init wifi memiliki port UDP
 WiFiUDP Udp;
+
+// init time client
+NTPClient timeClient(Udp, "pool.ntp.org");
+
+// init wifi secure with sll
+WiFiClientSecure espClient;
+
+// init pubsubclient untuk masukkan ssl
+PubSubClient client(espClient);
 
 // fungsi untuk menghitung jumlah array
 int ArrayLength(String arr[])
@@ -226,6 +291,7 @@ void setup()
   rfid.PCD_Init();
   // tulis id perangkat kedalam eeprom
   WriteEEPROM(0, ReadChipId()); // C4C07C842178
+  SN_SENSOR = ReadEEPROM(0);
 
   // matikan wifi
   WiFi.mode(WIFI_OFF);
@@ -274,6 +340,15 @@ void setup()
     WiFi.beginSmartConfig();
   }
 
+  // init time client agar bisa berjalan
+  timeClient.begin();
+
+  // Setting cert ssl untuk pubsub
+  espClient.setCACert(ca_cert); // Set CA certificate
+
+  // connect ke mqtt broker server hivemq
+  client.setServer(mqtt_server, portMqtt);
+
   // menambahkan fungsi pada button
   button.attachClick(SwitchMode);
   button.attachDoubleClick(RestartESP);
@@ -285,6 +360,10 @@ void setup()
 
 void loop()
 {
+  // untuk update dengan server NTP
+  timeClient.update();
+  // untuk membuat file json
+  DynamicJsonDocument json_active(200);
   // mendefinisikan waktu sekarang dengan value dari millis
   unsigned long timeNow = millis();
 
@@ -315,6 +394,30 @@ void loop()
 
     // setting bool smartconfig jadi true
     SMART_CONFIG_SUCCESS = !SMART_CONFIG_SUCCESS;
+
+    if (!client.connected())
+    {
+      String displayText[] = {"Proses", "Koneksi", "Jaringan", "MQTT!"};
+      GenerateDisplay(displayText, 4, tft.width() / 2, 50);
+      while (!client.connect(clientId.c_str(), mqtt_user, mqtt_password))
+      {
+        delay(300);
+      }
+    }
+    else
+    {
+      client.loop();
+      if ((unsigned long)(timeNow - timeBefore_MQTT_CHECK_STATUS) >= interval_MQTT_CHECK_STATUS)
+      {
+        // Create a JSON document
+        json_active["sn_sensor"] = SN_SENSOR;
+        json_active["is_active"] = true;
+        json_active["timestamp"] = timeClient.getEpochTime();
+        serializeJson(json_active, jsonString);
+        client.publish(topic_online, strdup(jsonString.c_str()));
+        timeBefore_MQTT_CHECK_STATUS = millis();
+      }
+    }
 
     // check apakah sudah pernah tampilkan text jaringan aman?
     if (CHECK_DISPLAY_ON_STANDBY)
@@ -351,6 +454,13 @@ void loop()
     Serial.print(F("PICC type: "));
     MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
     Serial.println(rfid.PICC_GetTypeName(piccType));
+
+    json_active["sn_sensor"] = SN_SENSOR;
+    json_active["type"] = switchMode;
+    json_active["rfid"] = GetUIDString(rfid.uid);
+    json_active["timestamp"] = timeClient.getEpochTime();
+    serializeJson(json_active, jsonString);
+    client.publish(read_rfid, strdup(jsonString.c_str()));
 
     // mengambil data uid dari kartu rfid yang terbaca
     Serial.print("Kartu ID Anda : ");
