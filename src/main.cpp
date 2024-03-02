@@ -363,7 +363,7 @@ void loop()
   // untuk update dengan server NTP
   timeClient.update();
   // untuk membuat file json
-  DynamicJsonDocument json_active(200);
+  JsonDocument json_active;
   // mendefinisikan waktu sekarang dengan value dari millis
   unsigned long timeNow = millis();
 
