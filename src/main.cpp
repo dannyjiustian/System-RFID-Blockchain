@@ -399,16 +399,21 @@ void loop()
     {
       String displayText[] = {"Proses", "Koneksi", "Jaringan", "MQTT!"};
       GenerateDisplay(displayText, 4, tft.width() / 2, 50);
+      Serial.println("coba konek mqtt");
       while (!client.connect(clientId.c_str(), mqtt_user, mqtt_password))
       {
         delay(300);
       }
+      String displayText1[] = {"Silakan Scan", "Kartu Kamu", "Terima Kasih!"};
+      GenerateDisplay(displayText1, ArrayLength(displayText1), tft.width() / 2, 70);
+      delay(10);
     }
     else
     {
       client.loop();
       if ((unsigned long)(timeNow - timeBefore_MQTT_CHECK_STATUS) >= interval_MQTT_CHECK_STATUS)
       {
+        Serial.println("konek");
         // Create a JSON document
         json_active["sn_sensor"] = SN_SENSOR;
         json_active["is_active"] = true;
