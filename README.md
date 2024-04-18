@@ -14,9 +14,8 @@ If you want to run this code, your first step is to build this code and make sur
 ## Scematic the Hardware
 
 #### You can use this Scematic for build the hardware system with another device sensor
-
-![Schematic](https://github.com/dannyjiustian/System-RFID-Blockchain/assets/26474898/752be219-5a62-4730-8f18-4fe6ecd067b6)
-![Boardview](https://github.com/dannyjiustian/System-RFID-Blockchain/assets/26474898/fca62d71-e8bf-44f0-9544-0621a6f92a9d)
+![Schematic](https://github.com/dannyjiustian/System-Hardware-RFID-Blockchain/assets/26474898/16b59331-1b70-4c22-9701-9274f788542a)
+![Boardview](https://github.com/dannyjiustian/System-Hardware-RFID-Blockchain/assets/26474898/3816d426-595a-4306-b78f-f8d2850558e6)
 
 ## Tech Stack
 
